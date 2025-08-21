@@ -609,30 +609,32 @@ func (compare *compare) namedEntryLists(path ytbx.Path, identifier listItemIdent
 	fromNames := make([]string, 0, fromLength)
 	toNames := make([]string, 0, fromLength)
 
-	// Find entries that are common to both lists to compare them separately, and
-	// find entries that are only in from, but not to and are therefore removed
-	for _, fromEntry := range from.Content {
-		name, err := identifier.Name(fromEntry)
-		if err != nil {
-			return nil, fmt.Errorf("failed to identify name: %w", err)
-		}
-
-		if toEntry, err := identifier.FindNodeByName(to, name); err == nil {
-			// `from` and `to` have the same entry identified by identifier and name -> require comparison
-			diffs, err := compare.objects(
-				ytbx.NewPathWithNamedListElement(path, identifier, name),
-				followAlias(fromEntry),
-				followAlias(toEntry),
-			)
+	if compare.settings.DetailedListDiff {
+		// Find entries that are common to both lists to compare them separately, and
+		// find entries that are only in from, but not to and are therefore removed
+		for _, fromEntry := range from.Content {
+			name, err := identifier.Name(fromEntry)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to identify name: %w", err)
 			}
-			result = append(result, diffs...)
-			fromNames = append(fromNames, name)
 
-		} else {
-			// `from` has an entry (identified by identifier and name), but `to` does not -> removal
-			removals = append(removals, fromEntry)
+			if toEntry, err := identifier.FindNodeByName(to, name); err == nil {
+				// `from` and `to` have the same entry identified by identifier and name -> require comparison
+				diffs, err := compare.objects(
+					ytbx.NewPathWithNamedListElement(path, identifier, name),
+					followAlias(fromEntry),
+					followAlias(toEntry),
+				)
+				if err != nil {
+					return nil, err
+				}
+				result = append(result, diffs...)
+				fromNames = append(fromNames, name)
+
+			} else {
+				// `from` has an entry (identified by identifier and name), but `to` does not -> removal
+				removals = append(removals, fromEntry)
+			}
 		}
 
 		// Find entries that are only in to, but not from and are therefore added
