@@ -612,10 +612,13 @@ func (compare *compare) namedEntryLists(path ytbx.Path, identifier listItemIdent
 	// Collect names for both lists
 	for _, fromEntry := range from.Content {
 		name, err := identifier.Name(fromEntry)
-		if err == nil {
-			fromNames = append(fromNames, name)
+		if err != nil {
+			return nil, fmt.Errorf("failed to identify name: %w", err)
 		}
+		fromNames = append(fromNames, name)
 	}
+
+	// Collect names for both lists
 	for _, toEntry := range to.Content {
 		name, err := identifier.Name(toEntry)
 		if err == nil {
@@ -631,7 +634,10 @@ func (compare *compare) namedEntryLists(path ytbx.Path, identifier listItemIdent
 			fromMap[name] = fromEntry
 		}
 	}
+	// Build lookup map for the `to` list
 	toMap := make(map[string]*yamlv3.Node, len(to.Content))
+
+	// Fill the `to` map with the entries from the `to` list
 	for _, toEntry := range to.Content {
 		name, err := identifier.Name(toEntry)
 		if err == nil {
