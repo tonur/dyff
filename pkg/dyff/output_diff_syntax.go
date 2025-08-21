@@ -26,6 +26,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/gonvenience/ytbx"
 )
 
 // DiffSyntaxReport is a reporter with human readable output in mind
@@ -34,6 +36,7 @@ type DiffSyntaxReport struct {
 	RootDescriptionPrefix string
 	ChangeTypePrefix      string
 	HumanReport
+	OnlyChangedLines bool // new: minimal diff output for arrays/lists
 }
 
 // WriteReport writes a human readable report to the provided writer
@@ -78,11 +81,14 @@ func (report *DiffSyntaxReport) generateDiffSyntaxDiffOutput(output stringWriter
 
 	blocks := make([]string, len(diff.Details))
 	for i, detail := range diff.Details {
-		generatedOutput, err := report.generateDiffSyntaxDetailOutput(detail)
+		var path ytbx.Path
+		if diff.Path != nil {
+			path = *diff.Path
+		}
+		generatedOutput, err := report.generateDiffSyntaxDetailOutput(detail, path)
 		if err != nil {
 			return err
 		}
-
 		blocks[i] = generatedOutput
 	}
 
@@ -98,7 +104,21 @@ func (report *DiffSyntaxReport) generateDiffSyntaxDiffOutput(output stringWriter
 }
 
 // generatedyffSyntaxDetailOutput only serves as a dispatcher to call the correct sub function for the respective type of change
-func (report *DiffSyntaxReport) generateDiffSyntaxDetailOutput(detail Detail) (string, error) {
+func (report *DiffSyntaxReport) generateDiffSyntaxDetailOutput(detail Detail, path ytbx.Path) (string, error) {
+	// If OnlyChangedLines is set, and this is a MODIFICATION, output minimal diff
+	if report.OnlyChangedLines && detail.Kind == MODIFICATION {
+		var b strings.Builder
+		b.WriteString(fmt.Sprintf("@@ %s @@\n", path))
+		b.WriteString("! ± value change\n")
+		if detail.From != nil {
+			b.WriteString(fmt.Sprintf("- %v\n", detail.From))
+		}
+		if detail.To != nil {
+			b.WriteString(fmt.Sprintf("+ %v\n", detail.To))
+		}
+		return b.String(), nil
+	}
+
 	switch detail.Kind {
 	case ADDITION:
 		detailOutput, err := report.generateHumanDetailOutputAddition(detail)
@@ -106,7 +126,6 @@ func (report *DiffSyntaxReport) generateDiffSyntaxDetailOutput(detail Detail) (s
 			return "", err
 		}
 		detailOutput = report.prefixChangeType(detailOutput)
-
 		return report.prefixChangeBlock(detailOutput, ADDITION), nil
 
 	case REMOVAL:
@@ -115,7 +134,6 @@ func (report *DiffSyntaxReport) generateDiffSyntaxDetailOutput(detail Detail) (s
 			return "", err
 		}
 		detailOutput = report.prefixChangeType(detailOutput)
-
 		return report.prefixChangeBlock(detailOutput, REMOVAL), nil
 
 	case MODIFICATION:
