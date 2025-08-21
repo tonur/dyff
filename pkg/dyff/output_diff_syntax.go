@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"github.com/gonvenience/ytbx"
 )
 
 // DiffSyntaxReport is a reporter with human readable output in mind
@@ -77,15 +78,18 @@ func (report *DiffSyntaxReport) generateDiffSyntaxDiffOutput(output stringWriter
 		_, _ = output.WriteString(fmt.Sprintf("%s %s\n", report.RootDescriptionPrefix, diff.Path.RootDescription()))
 	}
 
-	blocks := make([]string, len(diff.Details))
-	for i, detail := range diff.Details {
-		generatedOutput, err := report.generateDiffSyntaxDetailOutput(detail)
-		if err != nil {
-			return err
-		}
-
-		blocks[i] = generatedOutput
-	}
+       blocks := make([]string, len(diff.Details))
+       for i, detail := range diff.Details {
+	       var path ytbx.Path
+	       if diff.Path != nil {
+		       path = *diff.Path
+	       }
+	       generatedOutput, err := report.generateDiffSyntaxDetailOutput(detail, path)
+	       if err != nil {
+		       return err
+	       }
+	       blocks[i] = generatedOutput
+       }
 
 	// For the use case in which only a path-less diff is suppose to be printed,
 	// omit the indent in this case since there is only one element to show
@@ -99,13 +103,11 @@ func (report *DiffSyntaxReport) generateDiffSyntaxDiffOutput(output stringWriter
 }
 
 // generatedyffSyntaxDetailOutput only serves as a dispatcher to call the correct sub function for the respective type of change
-func (report *DiffSyntaxReport) generateDiffSyntaxDetailOutput(detail Detail) (string, error) {
+func (report *DiffSyntaxReport) generateDiffSyntaxDetailOutput(detail Detail, path ytbx.Path) (string, error) {
        // If OnlyChangedLines is set, and this is a MODIFICATION, output minimal diff
        if report.OnlyChangedLines && detail.Kind == MODIFICATION {
-	       // Try to output in a compact, line-based format
-	       // Use the path as the header, and show only the changed lines
 	       var b strings.Builder
-	       b.WriteString(fmt.Sprintf("@@ %s @@\n", detail.Path))
+	       b.WriteString(fmt.Sprintf("@@ %s @@\n", path))
 	       b.WriteString("! ± value change\n")
 	       if detail.From != nil {
 		       b.WriteString(fmt.Sprintf("- %v\n", detail.From))
