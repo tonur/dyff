@@ -610,7 +610,7 @@ func (compare *compare) namedEntryLists(path ytbx.Path, identifier listItemIdent
        fromNames := make([]string, 0, fromLength)
        toNames := make([]string, 0, fromLength)
 
-       if compare.settings.DetailedListDiff {
+	if compare.settings.DetailedListDiff {
 	       // Find entries that are common to both lists to compare them separately, and
 	       // find entries that are only in from, but not to and are therefore removed
 	       for _, fromEntry := range from.Content {
@@ -669,8 +669,15 @@ func (compare *compare) namedEntryLists(path ytbx.Path, identifier listItemIdent
 		       if err != nil {
 			       return nil, fmt.Errorf("failed to identify name: %w", err)
 		       }
-		       if _, err := identifier.FindNodeByName(to, name); err != nil {
+		       toEntry, errTo := identifier.FindNodeByName(to, name)
+		       if errTo != nil {
 			       removals = append(removals, fromEntry)
+		       } else {
+			       // Entry exists in both, check for modification
+			       if !nodesEqual(followAlias(fromEntry), followAlias(toEntry)) {
+				       removals = append(removals, fromEntry)
+				       additions = append(additions, toEntry)
+			       }
 		       }
 	       }
 	       for _, toEntry := range to.Content {
@@ -678,7 +685,8 @@ func (compare *compare) namedEntryLists(path ytbx.Path, identifier listItemIdent
 		       if err != nil {
 			       return nil, fmt.Errorf("failed to identify name: %w", err)
 		       }
-		       if _, err := identifier.FindNodeByName(from, name); err != nil {
+		       _, errFrom := identifier.FindNodeByName(from, name)
+		       if errFrom != nil {
 			       additions = append(additions, toEntry)
 		       }
 	       }
@@ -701,6 +709,7 @@ func (compare *compare) namedEntryLists(path ytbx.Path, identifier listItemIdent
 	       }
 	       return packChangesAndAddToResult([]Diff{}, path, orderChanges, additions, removals)
        }
+
 }
 
 func (compare *compare) nodeValues(path ytbx.Path, from *yamlv3.Node, to *yamlv3.Node) ([]Diff, error) {
@@ -1252,4 +1261,20 @@ func grab(node *yamlv3.Node, pathString string) (*yamlv3.Node, error) {
 
 func isWhitespaceOnlyChange(from string, to string) bool {
 	return strings.Trim(from, " \n") == strings.Trim(to, " \n")
+}
+
+// nodesEqual checks if two yamlv3.Node trees are equal
+func nodesEqual(a, b *yamlv3.Node) bool {
+       if a == nil || b == nil {
+	       return a == b
+       }
+       if a.Kind != b.Kind || a.Tag != b.Tag || a.Value != b.Value || len(a.Content) != len(b.Content) {
+	       return false
+       }
+       for i := range a.Content {
+	       if !nodesEqual(a.Content[i], b.Content[i]) {
+		       return false
+	       }
+       }
+       return true
 }
