@@ -58,6 +58,7 @@ type reportConfig struct {
 	filterRegexps             []string
 	excludeRegexps            []string
 	onlyChangedLines           bool // new flag for minimal diff output
+	detailedListDiff           bool // new flag for per-entry diffs in named lists
 }
 
 var defaults = reportConfig{
@@ -81,6 +82,7 @@ var defaults = reportConfig{
 	filterRegexps:             nil,
 	excludeRegexps:            nil,
 	onlyChangedLines:           false,
+	detailedListDiff:           false,
 }
 
 var reportOptions reportConfig
@@ -99,6 +101,7 @@ func applyReportOptionsFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&reportOptions.detectRenames, "detect-renames", defaults.detectRenames, "enable detection for renames (document level for Kubernetes resources)")
 	// New flag for minimal diff output
 	cmd.Flags().BoolVar(&reportOptions.onlyChangedLines, "only-changed-lines", defaults.onlyChangedLines, "output only changed lines for arrays/lists (minimal diff)")
+	cmd.Flags().BoolVar(&reportOptions.detailedListDiff, "detailed-list-diff", defaults.detailedListDiff, "show per-entry diffs for named lists (instead of grouped add/remove)")
 
 	// Main output preferences
 	cmd.Flags().StringVarP(&reportOptions.style, "output", "o", defaults.style, "specify the output style, supported styles: human, brief, github, gitlab, gitea")

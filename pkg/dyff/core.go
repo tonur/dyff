@@ -44,6 +44,7 @@ type compareSettings struct {
 	KubernetesEntityDetection                bool
 	DetectRenames                            bool
 	AdditionalIdentifiers                    []string
+	DetailedListDiff                         bool // show per-entry diffs for named lists
 }
 
 type compare struct {
@@ -93,6 +94,13 @@ func KubernetesEntityDetection(value bool) CompareOption {
 func DetectRenames(value bool) CompareOption {
 	return func(settings *compareSettings) {
 		settings.DetectRenames = value
+	}
+}
+
+// DetailedListDiff enabled detailed list diffs for named lists
+func DetailedListDiff(value bool) CompareOption {
+	return func(settings *compareSettings) {
+		settings.DetailedListDiff = value
 	}
 }
 
@@ -595,63 +603,104 @@ func (compare *compare) namedEntryLists(path ytbx.Path, identifier listItemIdent
 	removals := make([]*yamlv3.Node, 0)
 	additions := make([]*yamlv3.Node, 0)
 
-	result := make([]Diff, 0)
+       result := make([]Diff, 0)
 
-	// Fill two lists with the names of the entries that are common in both lists
-	fromLength := len(from.Content)
-	fromNames := make([]string, 0, fromLength)
-	toNames := make([]string, 0, fromLength)
+       // Fill two lists with the names of the entries that are common in both lists
+       fromLength := len(from.Content)
+       fromNames := make([]string, 0, fromLength)
+       toNames := make([]string, 0, fromLength)
 
-	// Find entries that are common to both lists to compare them separately, and
-	// find entries that are only in from, but not to and are therefore removed
-	for _, fromEntry := range from.Content {
-		name, err := identifier.Name(fromEntry)
-		if err != nil {
-			return nil, fmt.Errorf("failed to identify name: %w", err)
-		}
+       if compare.settings.DetailedListDiff {
+	       // Find entries that are common to both lists to compare them separately, and
+	       // find entries that are only in from, but not to and are therefore removed
+	       for _, fromEntry := range from.Content {
+		       name, err := identifier.Name(fromEntry)
+		       if err != nil {
+			       return nil, fmt.Errorf("failed to identify name: %w", err)
+		       }
 
-		if toEntry, err := identifier.FindNodeByName(to, name); err == nil {
-			// `from` and `to` have the same entry identified by identifier and name -> require comparison
-			diffs, err := compare.objects(
-				ytbx.NewPathWithNamedListElement(path, identifier, name),
-				followAlias(fromEntry),
-				followAlias(toEntry),
-			)
-			if err != nil {
-				return nil, err
-			}
-			result = append(result, diffs...)
-			fromNames = append(fromNames, name)
+		       if toEntry, err := identifier.FindNodeByName(to, name); err == nil {
+			       // `from` and `to` have the same entry identified by identifier and name -> require comparison
+			       diffs, err := compare.objects(
+				       ytbx.NewPathWithNamedListElement(path, identifier, name),
+				       followAlias(fromEntry),
+				       followAlias(toEntry),
+			       )
+			       if err != nil {
+				       return nil, err
+			       }
+			       result = append(result, diffs...)
+			       fromNames = append(fromNames, name)
 
-		} else {
-			// `from` has an entry (identified by identifier and name), but `to` does not -> removal
-			removals = append(removals, fromEntry)
-		}
-	}
+		       } else {
+			       // `from` has an entry (identified by identifier and name), but `to` does not -> removal
+			       removals = append(removals, fromEntry)
+		       }
+	       }
 
-	// Find entries that are only in to, but not from and are therefore added
-	for _, toEntry := range to.Content {
-		name, err := identifier.Name(toEntry)
-		if err != nil {
-			return nil, fmt.Errorf("failed to identify name: %w", err)
-		}
+	       // Find entries that are only in to, but not from and are therefore added
+	       for _, toEntry := range to.Content {
+		       name, err := identifier.Name(toEntry)
+		       if err != nil {
+			       return nil, fmt.Errorf("failed to identify name: %w", err)
+		       }
 
-		if _, err := identifier.FindNodeByName(from, name); err == nil {
-			// `to` and `from` have the same entry identified by identifier and name (comparison already covered by previous range)
-			toNames = append(toNames, name)
+		       if _, err := identifier.FindNodeByName(from, name); err == nil {
+			       // `to` and `from` have the same entry identified by identifier and name (comparison already covered by previous range)
+			       toNames = append(toNames, name)
 
-		} else {
-			// `to` has an entry (identified by identifier and name), but `from` does not -> addition
-			additions = append(additions, toEntry)
-		}
-	}
+		       } else {
+			       // `to` has an entry (identified by identifier and name), but `from` does not -> addition
+			       additions = append(additions, toEntry)
+		       }
+	       }
 
-	var orderChanges []Detail
-	if !compare.settings.IgnoreOrderChanges {
-		orderChanges = findOrderChangesInNamedEntryLists(fromNames, toNames)
-	}
+	       var orderChanges []Detail
+	       if !compare.settings.IgnoreOrderChanges {
+		       orderChanges = findOrderChangesInNamedEntryLists(fromNames, toNames)
+	       }
 
-	return packChangesAndAddToResult(result, path, orderChanges, additions, removals)
+	       return packChangesAndAddToResult(result, path, orderChanges, additions, removals)
+       } else {
+	       // Grouped add/remove output only
+	       // All entries that are not in both lists are treated as additions/removals
+	       for _, fromEntry := range from.Content {
+		       name, err := identifier.Name(fromEntry)
+		       if err != nil {
+			       return nil, fmt.Errorf("failed to identify name: %w", err)
+		       }
+		       if _, err := identifier.FindNodeByName(to, name); err != nil {
+			       removals = append(removals, fromEntry)
+		       }
+	       }
+	       for _, toEntry := range to.Content {
+		       name, err := identifier.Name(toEntry)
+		       if err != nil {
+			       return nil, fmt.Errorf("failed to identify name: %w", err)
+		       }
+		       if _, err := identifier.FindNodeByName(from, name); err != nil {
+			       additions = append(additions, toEntry)
+		       }
+	       }
+	       var orderChanges []Detail
+	       if !compare.settings.IgnoreOrderChanges {
+		       // For grouped output, order changes are not as meaningful, but keep for compatibility
+		       for _, fromEntry := range from.Content {
+			       name, err := identifier.Name(fromEntry)
+			       if err == nil {
+				       fromNames = append(fromNames, name)
+			       }
+		       }
+		       for _, toEntry := range to.Content {
+			       name, err := identifier.Name(toEntry)
+			       if err == nil {
+				       toNames = append(toNames, name)
+			       }
+		       }
+		       orderChanges = findOrderChangesInNamedEntryLists(fromNames, toNames)
+	       }
+	       return packChangesAndAddToResult([]Diff{}, path, orderChanges, additions, removals)
+       }
 }
 
 func (compare *compare) nodeValues(path ytbx.Path, from *yamlv3.Node, to *yamlv3.Node) ([]Diff, error) {
