@@ -57,6 +57,7 @@ type reportConfig struct {
 	excludes                  []string
 	filterRegexps             []string
 	excludeRegexps            []string
+	onlyChangedLines           bool // new flag for minimal diff output
 }
 
 var defaults = reportConfig{
@@ -79,6 +80,7 @@ var defaults = reportConfig{
 	excludes:                  nil,
 	filterRegexps:             nil,
 	excludeRegexps:            nil,
+	onlyChangedLines:           false,
 }
 
 var reportOptions reportConfig
@@ -95,6 +97,8 @@ func applyReportOptionsFlags(cmd *cobra.Command) {
 	cmd.Flags().StringSliceVar(&reportOptions.excludeRegexps, "exclude-regexp", defaults.excludeRegexps, "exclude reports from a set of differences based on supplied regular expressions")
 	cmd.Flags().BoolVarP(&reportOptions.ignoreValueChanges, "ignore-value-changes", "v", defaults.ignoreValueChanges, "exclude changes in values")
 	cmd.Flags().BoolVar(&reportOptions.detectRenames, "detect-renames", defaults.detectRenames, "enable detection for renames (document level for Kubernetes resources)")
+	// New flag for minimal diff output
+	cmd.Flags().BoolVar(&reportOptions.onlyChangedLines, "only-changed-lines", defaults.onlyChangedLines, "output only changed lines for arrays/lists (minimal diff)")
 
 	// Main output preferences
 	cmd.Flags().StringVarP(&reportOptions.style, "output", "o", defaults.style, "specify the output style, supported styles: human, brief, github, gitlab, gitea")
@@ -231,61 +235,64 @@ func writeReport(cmd *cobra.Command, report dyff.Report) error {
 		}
 
 	case "github", "linguist":
-		reportWriter = &dyff.DiffSyntaxReport{
-			PathPrefix:            "@@",
-			RootDescriptionPrefix: "#",
-			ChangeTypePrefix:      "!",
-			HumanReport: dyff.HumanReport{
-				Report:                report,
-				Indent:                0,
-				UseIndentLines:        reportOptions.useIndentLines,
-				DoNotInspectCerts:     reportOptions.doNotInspectCerts,
-				NoTableStyle:          true,
-				OmitHeader:            true,
-				UseGoPatchPaths:       reportOptions.useGoPatchPaths,
-				MinorChangeThreshold:  reportOptions.minorChangeThreshold,
-				MultilineContextLines: reportOptions.multilineContextLines,
-				PrefixMultiline:       true,
-			},
-		}
+		   reportWriter = &dyff.DiffSyntaxReport{
+			   PathPrefix:            "@@",
+			   RootDescriptionPrefix: "#",
+			   ChangeTypePrefix:      "!",
+			   OnlyChangedLines:      reportOptions.onlyChangedLines,
+			   HumanReport: dyff.HumanReport{
+				   Report:                report,
+				   Indent:                0,
+				   UseIndentLines:        reportOptions.useIndentLines,
+				   DoNotInspectCerts:     reportOptions.doNotInspectCerts,
+				   NoTableStyle:          true,
+				   OmitHeader:            true,
+				   UseGoPatchPaths:       reportOptions.useGoPatchPaths,
+				   MinorChangeThreshold:  reportOptions.minorChangeThreshold,
+				   MultilineContextLines: reportOptions.multilineContextLines,
+				   PrefixMultiline:       true,
+			   },
+		   }
 
 	case "gitlab", "rogue":
-		reportWriter = &dyff.DiffSyntaxReport{
-			PathPrefix:            "=",
-			RootDescriptionPrefix: "=",
-			ChangeTypePrefix:      "#",
-			HumanReport: dyff.HumanReport{
-				Report:                report,
-				Indent:                0,
-				UseIndentLines:        reportOptions.useIndentLines,
-				DoNotInspectCerts:     reportOptions.doNotInspectCerts,
-				NoTableStyle:          true,
-				OmitHeader:            true,
-				UseGoPatchPaths:       reportOptions.useGoPatchPaths,
-				MinorChangeThreshold:  reportOptions.minorChangeThreshold,
-				MultilineContextLines: reportOptions.multilineContextLines,
-				PrefixMultiline:       true,
-			},
-		}
+		   reportWriter = &dyff.DiffSyntaxReport{
+			   PathPrefix:            "=",
+			   RootDescriptionPrefix: "=",
+			   ChangeTypePrefix:      "#",
+			   OnlyChangedLines:      reportOptions.onlyChangedLines,
+			   HumanReport: dyff.HumanReport{
+				   Report:                report,
+				   Indent:                0,
+				   UseIndentLines:        reportOptions.useIndentLines,
+				   DoNotInspectCerts:     reportOptions.doNotInspectCerts,
+				   NoTableStyle:          true,
+				   OmitHeader:            true,
+				   UseGoPatchPaths:       reportOptions.useGoPatchPaths,
+				   MinorChangeThreshold:  reportOptions.minorChangeThreshold,
+				   MultilineContextLines: reportOptions.multilineContextLines,
+				   PrefixMultiline:       true,
+			   },
+		   }
 
 	case "gitea", "forgejo":
-		reportWriter = &dyff.DiffSyntaxReport{
-			PathPrefix:            "@@",
-			RootDescriptionPrefix: "=",
-			ChangeTypePrefix:      "!",
-			HumanReport: dyff.HumanReport{
-				Report:                report,
-				Indent:                0,
-				UseIndentLines:        reportOptions.useIndentLines,
-				DoNotInspectCerts:     reportOptions.doNotInspectCerts,
-				NoTableStyle:          true,
-				OmitHeader:            true,
-				UseGoPatchPaths:       reportOptions.useGoPatchPaths,
-				MinorChangeThreshold:  reportOptions.minorChangeThreshold,
-				MultilineContextLines: reportOptions.multilineContextLines,
-				PrefixMultiline:       true,
-			},
-		}
+		   reportWriter = &dyff.DiffSyntaxReport{
+			   PathPrefix:            "@@",
+			   RootDescriptionPrefix: "=",
+			   ChangeTypePrefix:      "!",
+			   OnlyChangedLines:      reportOptions.onlyChangedLines,
+			   HumanReport: dyff.HumanReport{
+				   Report:                report,
+				   Indent:                0,
+				   UseIndentLines:        reportOptions.useIndentLines,
+				   DoNotInspectCerts:     reportOptions.doNotInspectCerts,
+				   NoTableStyle:          true,
+				   OmitHeader:            true,
+				   UseGoPatchPaths:       reportOptions.useGoPatchPaths,
+				   MinorChangeThreshold:  reportOptions.minorChangeThreshold,
+				   MultilineContextLines: reportOptions.multilineContextLines,
+				   PrefixMultiline:       true,
+			   },
+		   }
 
 	case "brief", "short", "summary":
 		reportWriter = &dyff.BriefReport{

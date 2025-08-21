@@ -34,6 +34,7 @@ type DiffSyntaxReport struct {
 	RootDescriptionPrefix string
 	ChangeTypePrefix      string
 	HumanReport
+	OnlyChangedLines        bool // new: minimal diff output for arrays/lists
 }
 
 // WriteReport writes a human readable report to the provided writer
@@ -99,41 +100,55 @@ func (report *DiffSyntaxReport) generateDiffSyntaxDiffOutput(output stringWriter
 
 // generatedyffSyntaxDetailOutput only serves as a dispatcher to call the correct sub function for the respective type of change
 func (report *DiffSyntaxReport) generateDiffSyntaxDetailOutput(detail Detail) (string, error) {
-	switch detail.Kind {
-	case ADDITION:
-		detailOutput, err := report.generateHumanDetailOutputAddition(detail)
-		if err != nil {
-			return "", err
-		}
-		detailOutput = report.prefixChangeType(detailOutput)
+       // If OnlyChangedLines is set, and this is a MODIFICATION, output minimal diff
+       if report.OnlyChangedLines && detail.Kind == MODIFICATION {
+	       // Try to output in a compact, line-based format
+	       // Use the path as the header, and show only the changed lines
+	       var b strings.Builder
+	       b.WriteString(fmt.Sprintf("@@ %s @@\n", detail.Path))
+	       b.WriteString("! ± value change\n")
+	       if detail.From != nil {
+		       b.WriteString(fmt.Sprintf("- %v\n", detail.From))
+	       }
+	       if detail.To != nil {
+		       b.WriteString(fmt.Sprintf("+ %v\n", detail.To))
+	       }
+	       return b.String(), nil
+       }
 
-		return report.prefixChangeBlock(detailOutput, ADDITION), nil
+       switch detail.Kind {
+       case ADDITION:
+	       detailOutput, err := report.generateHumanDetailOutputAddition(detail)
+	       if err != nil {
+		       return "", err
+	       }
+	       detailOutput = report.prefixChangeType(detailOutput)
+	       return report.prefixChangeBlock(detailOutput, ADDITION), nil
 
-	case REMOVAL:
-		detailOutput, err := report.generateHumanDetailOutputRemoval(detail)
-		if err != nil {
-			return "", err
-		}
-		detailOutput = report.prefixChangeType(detailOutput)
+       case REMOVAL:
+	       detailOutput, err := report.generateHumanDetailOutputRemoval(detail)
+	       if err != nil {
+		       return "", err
+	       }
+	       detailOutput = report.prefixChangeType(detailOutput)
+	       return report.prefixChangeBlock(detailOutput, REMOVAL), nil
 
-		return report.prefixChangeBlock(detailOutput, REMOVAL), nil
+       case MODIFICATION:
+	       detailOutput, err := report.generateHumanDetailOutputModification(detail)
+	       if err != nil {
+		       return "", err
+	       }
+	       return report.prefixChangeType(detailOutput), nil
 
-	case MODIFICATION:
-		detailOutput, err := report.generateHumanDetailOutputModification(detail)
-		if err != nil {
-			return "", err
-		}
-		return report.prefixChangeType(detailOutput), nil
+       case ORDERCHANGE:
+	       detailOutput, err := report.generateHumanDetailOutputOrderchange(detail)
+	       if err != nil {
+		       return "", err
+	       }
+	       return report.prefixChangeType(detailOutput), nil
+       }
 
-	case ORDERCHANGE:
-		detailOutput, err := report.generateHumanDetailOutputOrderchange(detail)
-		if err != nil {
-			return "", err
-		}
-		return report.prefixChangeType(detailOutput), nil
-	}
-
-	return "", fmt.Errorf("unsupported detail type %c", detail.Kind)
+       return "", fmt.Errorf("unsupported detail type %c", detail.Kind)
 }
 
 func (report *DiffSyntaxReport) prefixChangeType(detailOutput string) string {
