@@ -609,6 +609,7 @@ func (compare *compare) namedEntryLists(path ytbx.Path, identifier listItemIdent
 	fromNames := make([]string, 0, fromLength)
 	toNames := make([]string, 0, fromLength)
 
+	// If detailed list diff is enabled, we need to find common entries
 	if compare.settings.DetailedListDiff {
 		// Find entries that are common to both lists to compare them separately, and
 		// find entries that are only in from, but not to and are therefore removed
